@@ -1,17 +1,35 @@
-# Serial port management for firmware communication
-#
-# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
 import logging, threading, os
 import serial
 
 import msgproto, chelper, util
 
+
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class error(Exception):
     pass
 
+
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class SerialReader:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, reactor, warn_prefix=""):
         self.reactor = reactor
         self.warn_prefix = warn_prefix
@@ -33,6 +51,12 @@ class SerialReader:
         # Sent message notification tracking
         self.last_notify_id = 0
         self.pending_notifications = {}
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _bg_thread(self):
         response = self.ffi_main.new('struct pull_queue_message *')
         while 1:
@@ -57,8 +81,20 @@ class SerialReader:
             except:
                 logging.exception("%sException in serial callback",
                                   self.warn_prefix)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _error(self, msg, *params):
         raise error(self.warn_prefix + (msg % params))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _get_identify_data(self, eventtime):
         # Query the "data dictionary" from the micro-controller
         identify_data = b""
@@ -76,6 +112,12 @@ class SerialReader:
                     # Done
                     return identify_data
                 identify_data += msgdata
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _start_session(self, serial_dev, serial_fd_type=b'u', client_id=0):
         self.serial_dev = serial_dev
         self.serialqueue = self.ffi_main.gc(
@@ -108,6 +150,12 @@ class SerialReader:
             self.ffi_lib.serialqueue_set_receive_window(
                 self.serialqueue, receive_window)
         return True
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_canbus(self, canbus_uuid, canbus_nodeid, canbus_iface="can0"):
         import can # XXX
         txid = canbus_nodeid * 2 + 256
@@ -157,6 +205,12 @@ class SerialReader:
             logging.info("%sFailed to match canbus_uuid - retrying..",
                          self.warn_prefix)
             self.disconnect()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_pipe(self, filename):
         logging.info("%sStarting connect", self.warn_prefix)
         start_time = self.reactor.monotonic()
@@ -173,6 +227,12 @@ class SerialReader:
             ret = self._start_session(serial_dev)
             if ret:
                 break
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_uart(self, serialport, baud, rts=True):
         # Initial connection
         logging.info("%sStarting serial connect", self.warn_prefix)
@@ -195,15 +255,33 @@ class SerialReader:
             ret = self._start_session(serial_dev)
             if ret:
                 break
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_file(self, debugoutput, dictionary, pace=False):
         self.serial_dev = debugoutput
         self.msgparser.process_identify(dictionary, decompress=False)
         self.serialqueue = self.ffi_main.gc(
             self.ffi_lib.serialqueue_alloc(self.serial_dev.fileno(), b'f', 0),
             self.ffi_lib.serialqueue_free)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_clock_est(self, freq, conv_time, conv_clock, last_clock):
         self.ffi_lib.serialqueue_set_clock_est(
             self.serialqueue, freq, conv_time, conv_clock, last_clock)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def disconnect(self):
         if self.serialqueue is not None:
             self.ffi_lib.serialqueue_exit(self.serialqueue)
@@ -216,18 +294,56 @@ class SerialReader:
         for pn in self.pending_notifications.values():
             pn.complete(None)
         self.pending_notifications.clear()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         if self.serialqueue is None:
             return ""
         self.ffi_lib.serialqueue_get_stats(self.serialqueue,
                                            self.stats_buf, len(self.stats_buf))
         return str(self.ffi_main.string(self.stats_buf).decode())
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_reactor(self):
         return self.reactor
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_msgparser(self):
         return self.msgparser
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def get_serialqueue(self):
+        return self.serialqueue
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_default_command_queue(self):
         return self.default_cmd_queue
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Serial response callbacks
     def register_response(self, callback, name, oid=None):
         with self.lock:
@@ -235,10 +351,22 @@ class SerialReader:
                 del self.handlers[name, oid]
             else:
                 self.handlers[name, oid] = callback
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Command sending
     def raw_send(self, cmd, minclock, reqclock, cmd_queue):
         self.ffi_lib.serialqueue_send(self.serialqueue, cmd_queue,
                                       cmd, len(cmd), minclock, reqclock, 0)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def raw_send_wait_ack(self, cmd, minclock, reqclock, cmd_queue):
         self.last_notify_id += 1
         nid = self.last_notify_id
@@ -250,16 +378,40 @@ class SerialReader:
         if params is None:
             self._error("Serial connection closed")
         return params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def send(self, msg, minclock=0, reqclock=0):
         cmd = self.msgparser.create_command(msg)
         self.raw_send(cmd, minclock, reqclock, self.default_cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def send_with_response(self, msg, response):
         cmd = self.msgparser.create_command(msg)
         src = SerialRetryCommand(self, response)
         return src.get_response([cmd], self.default_cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def alloc_command_queue(self):
         return self.ffi_main.gc(self.ffi_lib.serialqueue_alloc_commandqueue(),
                                 self.ffi_lib.serialqueue_free_commandqueue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Dumping debug lists
     def dump_debug(self):
         out = []
@@ -284,29 +436,74 @@ class SerialReader:
             out.append("Receive: %d %f %f %d: %s" % (
                 i, msg.receive_time, msg.sent_time, msg.len, ', '.join(cmds)))
         return '\n'.join(out)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Default message handlers
     def _handle_unknown_init(self, params):
         logging.debug("%sUnknown message %d (len %d) while identifying",
                       self.warn_prefix, params['#msgid'], len(params['#msg']))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def handle_unknown(self, params):
         logging.warn("%sUnknown message type %d: %s",
                      self.warn_prefix, params['#msgid'], repr(params['#msg']))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def handle_output(self, params):
         logging.info("%s%s: %s", self.warn_prefix,
                      params['#name'], params['#msg'])
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def handle_default(self, params):
         logging.warn("%sgot %s", self.warn_prefix, params)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 # Class to send a query command and return the received response
 class SerialRetryCommand:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, serial, name, oid=None):
         self.serial = serial
         self.name = name
         self.oid = oid
         self.last_params = None
         self.serial.register_response(self.handle_callback, name, oid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def handle_callback(self, params):
         self.last_params = params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_response(self, cmds, cmd_queue, minclock=0, reqclock=0):
         retries = 5
         retry_delay = .010
@@ -326,7 +523,12 @@ class SerialRetryCommand:
             reactor.pause(reactor.monotonic() + retry_delay)
             retries -= 1
             retry_delay *= 2.
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Attempt to place an AVR stk500v2 style programmer into normal mode
 def stk500v2_leave(ser, reactor):
     logging.debug("Starting stk500v2 leave programmer sequence")
@@ -344,7 +546,12 @@ def stk500v2_leave(ser, reactor):
     res = ser.read(4096)
     logging.debug("Got %s from stk500v2", repr(res))
     ser.baudrate = origbaud
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def cheetah_reset(serialport, reactor):
     # Fysetc Cheetah v1.2 boards have a weird stateful circuitry for
     # configuring the bootloader. This sequence takes care of disabling it for
@@ -370,7 +577,12 @@ def cheetah_reset(serialport, reactor):
     ser.dtr = False
     reactor.pause(reactor.monotonic() + 0.100)
     ser.close()
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Attempt an arduino style reset on a serial port
 def arduino_reset(serialport, reactor):
     # First try opening the port at a different baud

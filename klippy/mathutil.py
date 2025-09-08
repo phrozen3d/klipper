@@ -1,16 +1,22 @@
-# Simple math helper functions
-#
-# Copyright (C) 2018-2019  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import math, logging, multiprocessing, traceback
 import queuelogger
 
 
-######################################################################
-# Coordinate descent
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Helper code that implements coordinate descent
 def coordinate_descent(adj_params, params, error_func):
     # Define potential changes
@@ -46,7 +52,12 @@ def coordinate_descent(adj_params, params, error_func):
     logging.info("Coordinate descent best_err: %s  rounds: %d",
                  best_err, rounds)
     return params
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Helper to run the coordinate descent function in a background
 # process so that it does not block the main thread.
 def background_coordinate_descent(printer, adj_params, params, error_func):
@@ -83,10 +94,12 @@ def background_coordinate_descent(printer, adj_params, params, error_func):
     return res
 
 
-######################################################################
-# Trilateration
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Trilateration finds the intersection of three spheres.  See the
 # wikipedia article for the details of the algorithm.
 def trilateration(sphere_coords, radius2):
@@ -112,26 +125,53 @@ def trilateration(sphere_coords, radius2):
     return matrix_add(sphere_coord1, matrix_add(ex_x, matrix_add(ey_y, ez_z)))
 
 
-######################################################################
-# Matrix helper functions for 3x1 matrices
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_cross(m1, m2):
     return [m1[1] * m2[2] - m1[2] * m2[1],
             m1[2] * m2[0] - m1[0] * m2[2],
             m1[0] * m2[1] - m1[1] * m2[0]]
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_dot(m1, m2):
     return m1[0] * m2[0] + m1[1] * m2[1] + m1[2] * m2[2]
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_magsq(m1):
     return m1[0]**2 + m1[1]**2 + m1[2]**2
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_add(m1, m2):
     return [m1[0] + m2[0], m1[1] + m2[1], m1[2] + m2[2]]
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_sub(m1, m2):
     return [m1[0] - m2[0], m1[1] - m2[1], m1[2] - m2[2]]
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def matrix_mul(m1, s):
     return [m1[0]*s, m1[1]*s, m1[2]*s]

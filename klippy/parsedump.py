@@ -1,18 +1,32 @@
-#!/usr/bin/env python2
-# Script to parse a serial port data dump
-#
-# Copyright (C) 2016  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+#!/usr/bin/env python
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import os, sys, logging
 import msgproto
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def read_dictionary(filename):
     dfile = open(filename, 'rb')
     dictionary = dfile.read()
     dfile.close()
     return dictionary
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def main():
     dict_filename, data_filename = sys.argv[1:]
 
@@ -23,12 +37,12 @@ def main():
 
     f = open(data_filename, 'rb')
     fd = f.fileno()
-    data = ""
+    data = bytearray()
     while 1:
         newdata = os.read(fd, 4096)
         if not newdata:
             break
-        data += newdata
+        data += bytearray(newdata)
         while 1:
             l = mp.check_packet(data)
             if l == 0:
@@ -37,7 +51,7 @@ def main():
                 logging.error("Invalid data")
                 data = data[-l:]
                 continue
-            msgs = mp.dump(bytearray(data[:l]))
+            msgs = mp.dump(data[:l])
             sys.stdout.write('\n'.join(msgs[1:]) + '\n')
             data = data[l:]
 

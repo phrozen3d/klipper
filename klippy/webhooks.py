@@ -1,8 +1,12 @@
-# Klippy WebHooks registration and server connection
-#
-# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import logging, socket, os, sys, errno, json, collections
 import gcode
 
@@ -16,6 +20,12 @@ REQUEST_LOG_SIZE = 20
 #
 json_loads_byteify = None
 if sys.version_info.major < 3:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def json_loads_byteify(data, ignore_dicts=False):
         if isinstance(data, unicode):
             return data.encode('utf-8')
@@ -25,21 +35,47 @@ if sys.version_info.major < 3:
             return {json_loads_byteify(k, True): json_loads_byteify(v, True)
                     for k, v in data.items()}
         return data
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class WebRequestError(gcode.CommandError):
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, message,):
         Exception.__init__(self, message)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def to_dict(self):
         return {
             'error': 'WebRequestError',
             'message': str(self)}
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class Sentinel:
     pass
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class WebRequest:
     error = WebRequestError
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, client_conn, request):
         self.client_conn = client_conn
         base_request = json.loads(request, object_hook=json_loads_byteify)
@@ -52,10 +88,20 @@ class WebRequest:
             raise ValueError("Invalid request type")
         self.response = None
         self.is_error = False
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_client_connection(self):
         return self.client_conn
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get(self, item, default=Sentinel, types=None):
         value = self.params.get(item, default)
         if value is Sentinel:
@@ -64,31 +110,71 @@ class WebRequest:
             and item in self.params):
             raise WebRequestError("Invalid Argument Type [%s]" % (item,))
         return value
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_str(self, item, default=Sentinel):
         return self.get(item, default, types=(str,))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_int(self, item, default=Sentinel):
         return self.get(item, default, types=(int,))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_float(self, item, default=Sentinel):
         return float(self.get(item, default, types=(int, float)))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_dict(self, item, default=Sentinel):
         return self.get(item, default, types=(dict,))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_method(self):
         return self.method
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_error(self, error):
         self.is_error = True
         self.response = error.to_dict()
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def send(self, data):
         if self.response is not None:
             raise WebRequestError("Multiple calls to send not allowed")
         self.response = data
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def finish(self):
         if self.id is None:
             return None
@@ -100,8 +186,17 @@ class WebRequest:
             # send, default response is {}
             self.response = {}
         return {"id": self.id, rtype: self.response}
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class ServerSocket:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, webhooks, printer):
         self.printer = printer
         self.webhooks = webhooks
@@ -125,7 +220,12 @@ class ServerSocket:
             'klippy:disconnect', self._handle_disconnect)
         printer.register_event_handler(
             "klippy:shutdown", self._handle_shutdown)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_accept(self, eventtime):
         try:
             sock, addr = self.sock.accept()
@@ -134,7 +234,12 @@ class ServerSocket:
         sock.setblocking(0)
         client = ClientConnection(self, sock)
         self.clients[client.uid] = client
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_disconnect(self):
         for client in list(self.clients.values()):
             client.close()
@@ -144,11 +249,21 @@ class ServerSocket:
                 self.sock.close()
             except socket.error:
                 pass
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_shutdown(self):
         for client in self.clients.values():
             client.dump_request_log()
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _remove_socket_file(self, file_path):
         try:
             os.remove(file_path)
@@ -158,10 +273,20 @@ class ServerSocket:
                     "webhooks: Unable to delete socket file '%s'"
                     % (file_path))
                 raise
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def pop_client(self, client_id):
         self.clients.pop(client_id, None)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         # Called once per second - check for idle clients
         for client in list(self.clients.values()):
@@ -171,8 +296,17 @@ class ServerSocket:
                     logging.info("Closing unresponsive client %s", client.uid)
                     client.close()
         return False, ""
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class ClientConnection:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, server, sock):
         self.printer = server.printer
         self.webhooks = server.webhooks
@@ -187,7 +321,12 @@ class ClientConnection:
         self.blocking_count = 0
         self.set_client_info("?", "New connection")
         self.request_log = collections.deque([], REQUEST_LOG_SIZE)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def dump_request_log(self):
         out = []
         out.append("Dumping %d requests for client %d"
@@ -195,7 +334,12 @@ class ClientConnection:
         for eventtime, request in self.request_log:
             out.append("Received %f: %s" % (eventtime, request))
         logging.info("\n".join(out))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_client_info(self, client_info, state_msg=None):
         if state_msg is None:
             state_msg = "Client info %s" % (repr(client_info),)
@@ -206,7 +350,12 @@ class ClientConnection:
             return
         rollover_msg = "webhooks client %s: %s" % (self.uid, repr(client_info))
         self.printer.set_rollover_info(log_id, rollover_msg, log=False)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def close(self):
         if self.fd_handle is None:
             return
@@ -218,10 +367,20 @@ class ClientConnection:
         except socket.error:
             pass
         self.server.pop_client(self.uid)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def is_closed(self):
         return self.fd_handle is None
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def process_received(self, eventtime):
         try:
             data = self.sock.recv(4096)
@@ -249,7 +408,12 @@ class ClientConnection:
                 continue
             self.reactor.register_callback(
                 lambda e, s=self, wr=web_request: s._process_request(wr))
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _process_request(self, web_request):
         try:
             func = self.webhooks.get_callback(web_request.get_method())
@@ -266,13 +430,23 @@ class ClientConnection:
         if result is None:
             return
         self.send(result)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def send(self, data):
         jmsg = json.dumps(data, separators=(',', ':'))
         self.send_buffer += jmsg.encode() + b"\x03"
         if not self.is_blocking:
             self._do_send()
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _do_send(self, eventtime=None):
         if self.fd_handle is None:
             return
@@ -293,8 +467,17 @@ class ClientConnection:
             self.reactor.set_fd_wake(self.fd_handle, True, False)
             self.is_blocking = False
         self.send_buffer = self.send_buffer[sent:]
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class WebHooks:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         self._endpoints = {"list_endpoints": self._handle_list_endpoints}
@@ -305,12 +488,22 @@ class WebHooks:
         self.register_endpoint("register_remote_method",
                                self._handle_rpc_registration)
         self.sconn = ServerSocket(self, printer)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_endpoint(self, path, callback):
         if path in self._endpoints:
             raise WebRequestError("Path already registered to an endpoint")
         self._endpoints[path] = callback
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_mux_endpoint(self, path, key, value, callback):
         prev = self._mux_endpoints.get(path)
         if prev is None:
@@ -326,7 +519,12 @@ class WebHooks:
                 "mux endpoint %s %s %s already registered (%s)"
                 % (path, key, value, prev_values))
         prev_values[value] = callback
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_mux(self, web_request):
         key, values = self._mux_endpoints[web_request.get_method()]
         if None in values:
@@ -337,10 +535,20 @@ class WebHooks:
             raise web_request.error("The value '%s' is not valid for %s"
                                     % (key_param, key))
         values[key_param](web_request)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_list_endpoints(self, web_request):
         web_request.send({'endpoints': list(self._endpoints.keys())})
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_info_request(self, web_request):
         client_info = web_request.get_dict('client_info', None)
         if client_info is not None:
@@ -355,10 +563,20 @@ class WebHooks:
         for sa in ['log_file', 'config_file', 'software_version', 'cpu_info']:
             response[sa] = start_args.get(sa)
         web_request.send(response)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_estop_request(self, web_request):
         self.printer.invoke_shutdown("Shutdown due to webhooks request")
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_rpc_registration(self, web_request):
         template = web_request.get_dict('response_template')
         method = web_request.get_str('remote_method')
@@ -366,10 +584,20 @@ class WebHooks:
         logging.info("webhooks: registering remote method '%s' "
                      "for connection id: %d" % (method, id(new_conn)))
         self._remote_methods.setdefault(method, {})[new_conn] = template
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_connection(self):
         return self.sconn
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_callback(self, path):
         cb = self._endpoints.get(path, None)
         if cb is None:
@@ -377,14 +605,29 @@ class WebHooks:
             logging.info(msg)
             raise WebRequestError(msg)
         return cb
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_status(self, eventtime):
         state_message, state = self.printer.get_state_message()
         return {'state': state, 'state_message': state_message}
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         return self.sconn.stats(eventtime)
-
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def call_remote_method(self, method, **kwargs):
         if method not in self._remote_methods:
             raise self.printer.command_error(
@@ -402,8 +645,17 @@ class WebHooks:
             raise self.printer.command_error(
                 "No active connections for method '%s'" % (method))
         self._remote_methods[method] = valid_conns
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class GCodeHelper:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         self.gcode = printer.lookup_object("gcode")
@@ -419,14 +671,44 @@ class GCodeHelper:
                              self._handle_firmware_restart)
         wh.register_endpoint("gcode/subscribe_output",
                              self._handle_subscribe_output)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_help(self, web_request):
         web_request.send(self.gcode.get_command_help())
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_script(self, web_request):
         self.gcode.run_script(web_request.get_str('script'))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_restart(self, web_request):
         self.gcode.run_script('restart')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_firmware_restart(self, web_request):
         self.gcode.run_script('firmware_restart')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _output_callback(self, msg):
         for cconn, template in list(self.clients.items()):
             if cconn.is_closed():
@@ -435,6 +717,12 @@ class GCodeHelper:
             tmp = dict(template)
             tmp['params'] = {'response': msg}
             cconn.send(tmp)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_subscribe_output(self, web_request):
         cconn = web_request.get_client_connection()
         template = web_request.get_dict('response_template', {})
@@ -444,8 +732,17 @@ class GCodeHelper:
             self.is_output_registered = True
 
 SUBSCRIPTION_REFRESH_TIME = .25
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class QueryStatusHelper:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         self.clients = {}
@@ -457,10 +754,22 @@ class QueryStatusHelper:
         webhooks.register_endpoint("objects/list", self._handle_list)
         webhooks.register_endpoint("objects/query", self._handle_query)
         webhooks.register_endpoint("objects/subscribe", self._handle_subscribe)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_list(self, web_request):
         objects = [n for n, o in self.printer.lookup_objects()
                    if hasattr(o, 'get_status')]
         web_request.send({'objects': objects})
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _do_query(self, eventtime):
         last_query = self.last_query
         query = self.last_query = {}
@@ -507,6 +816,12 @@ class QueryStatusHelper:
             self.query_timer = None
             return reactor.NEVER
         return eventtime + SUBSCRIPTION_REFRESH_TIME
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_query(self, web_request, is_subscribe=False):
         objects = web_request.get_dict('objects')
         # Validate subscription format
@@ -534,9 +849,20 @@ class QueryStatusHelper:
         web_request.send(msg['params'])
         if is_subscribe:
             self.clients[cconn] = (cconn, objects, cconn.send, template)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_subscribe(self, web_request):
         self._handle_query(web_request, is_subscribe=True)
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def add_early_printer_objects(printer):
     printer.add_object('webhooks', WebHooks(printer))
     GCodeHelper(printer)

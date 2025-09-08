@@ -1,15 +1,29 @@
-# Micro-controller clock synchronization
-#
-# Copyright (C) 2016-2018  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import logging, math
 
 RTT_AGE = .000010 / (60. * 60.)
 DECAY = 1. / 30.
 TRANSMIT_EXTRA = .001
 
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class ClockSync:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, reactor):
         self.reactor = reactor
         self.serial = None
@@ -27,6 +41,12 @@ class ClockSync:
         self.clock_avg = self.clock_covariance = 0.
         self.prediction_variance = 0.
         self.last_prediction_time = 0.
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect(self, serial):
         self.serial = serial
         self.mcu_freq = serial.msgparser.get_constant_float('CLOCK_FREQ')
@@ -47,6 +67,12 @@ class ClockSync:
         self.cmd_queue = serial.alloc_command_queue()
         serial.register_response(self._handle_clock, 'clock')
         self.reactor.update_timer(self.get_clock_timer, self.reactor.NOW)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_file(self, serial, pace=False):
         self.serial = serial
         self.mcu_freq = serial.msgparser.get_constant_float('CLOCK_FREQ')
@@ -55,6 +81,12 @@ class ClockSync:
         if pace:
             freq = self.mcu_freq
         serial.set_clock_est(freq, self.reactor.monotonic(), 0, 0)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # MCU clock querying (_handle_clock is invoked from background thread)
     def _get_clock_event(self, eventtime):
         self.serial.raw_send(self.get_clock_cmd, 0, 0, self.cmd_queue)
@@ -62,6 +94,12 @@ class ClockSync:
         # Use an unusual time for the next event so clock messages
         # don't resonate with other periodic events.
         return eventtime + .9839
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_clock(self, params):
         self.queries_pending = 0
         # Extend clock to 64bit
@@ -121,20 +159,56 @@ class ClockSync:
                           self.clock_avg, new_freq)
         #logging.debug("regr %.3f: freq=%.3f d=%d(%.3f)",
         #              sent_time, new_freq, clock - exp_clock, pred_stddev)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # clock frequency conversions
     def print_time_to_clock(self, print_time):
         return int(print_time * self.mcu_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def clock_to_print_time(self, clock):
         return clock / self.mcu_freq
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # system time conversions
     def get_clock(self, eventtime):
         sample_time, clock, freq = self.clock_est
         return int(clock + (eventtime - sample_time) * freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def estimate_clock_systime(self, reqclock):
         sample_time, clock, freq = self.clock_est
         return float(reqclock - clock)/freq + sample_time
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def estimated_print_time(self, eventtime):
         return self.clock_to_print_time(self.get_clock(eventtime))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # misc commands
     def clock32_to_clock64(self, clock32):
         last_clock = self.last_clock
@@ -142,8 +216,20 @@ class ClockSync:
         if clock_diff & 0x80000000:
             return last_clock + 0x100000000 - clock_diff
         return last_clock - clock_diff
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def is_active(self):
         return self.queries_pending <= 4
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def dump_debug(self):
         sample_time, clock, freq = self.clock_est
         return ("clocksync state: mcu_freq=%d last_clock=%d"
@@ -155,20 +241,47 @@ class ClockSync:
                     self.time_avg, self.time_variance,
                     self.clock_avg, self.clock_covariance,
                     self.prediction_variance))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         sample_time, clock, freq = self.clock_est
         return "freq=%d" % (freq,)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def calibrate_clock(self, print_time, eventtime):
         return (0., self.mcu_freq)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 # Clock syncing code for secondary MCUs (whose clocks are sync'ed to a
 # primary MCU)
 class SecondarySync(ClockSync):
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, reactor, main_sync):
         ClockSync.__init__(self, reactor)
         self.main_sync = main_sync
         self.clock_adj = (0., 1.)
         self.last_sync_time = 0.
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect(self, serial):
         ClockSync.connect(self, serial)
         self.clock_adj = (0., self.mcu_freq)
@@ -177,24 +290,60 @@ class SecondarySync(ClockSync):
         local_print_time = self.estimated_print_time(curtime)
         self.clock_adj = (main_print_time - local_print_time, self.mcu_freq)
         self.calibrate_clock(0., curtime)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def connect_file(self, serial, pace=False):
         ClockSync.connect_file(self, serial, pace)
         self.clock_adj = (0., self.mcu_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # clock frequency conversions
     def print_time_to_clock(self, print_time):
         adjusted_offset, adjusted_freq = self.clock_adj
         return int((print_time - adjusted_offset) * adjusted_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def clock_to_print_time(self, clock):
         adjusted_offset, adjusted_freq = self.clock_adj
         return clock / adjusted_freq + adjusted_offset
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # misc commands
     def dump_debug(self):
         adjusted_offset, adjusted_freq = self.clock_adj
         return "%s clock_adj=(%.3f %.3f)" % (
             ClockSync.dump_debug(self), adjusted_offset, adjusted_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         adjusted_offset, adjusted_freq = self.clock_adj
         return "%s adj=%d" % (ClockSync.stats(self, eventtime), adjusted_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def calibrate_clock(self, print_time, eventtime):
         # Calculate: est_print_time = main_sync.estimatated_print_time()
         ser_time, ser_clock, ser_freq = self.main_sync.clock_est

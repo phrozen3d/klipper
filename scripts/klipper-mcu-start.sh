@@ -1,5 +1,11 @@
 #!/bin/sh
-# System startup script to start the MCU Linux firmware
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
 
 ### BEGIN INIT INFO
 # Provides:          klipper_mcu
@@ -19,7 +25,12 @@ KLIPPER_HOST_ARGS="-r"
 PIDFILE=/var/run/klipper_mcu.pid
 
 . /lib/lsb/init-functions
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 mcu_host_stop()
 {
     # Shutdown existing Klipper instance (if applicable). The goal is to
@@ -37,7 +48,12 @@ mcu_host_stop()
     log_daemon_msg "Stopping klipper host mcu" $NAME
     killproc -p $PIDFILE $KLIPPER_HOST_MCU
 }
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 mcu_host_start()
 {
     [ -x $KLIPPER_HOST_MCU ] || return

@@ -1,31 +1,54 @@
-# Pin name handling
-#
-# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
-import re
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
 
+
+import re
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class error(Exception):
     pass
 
-
-######################################################################
-# Command translation
-######################################################################
-
 re_pin = re.compile(r'(?P<prefix>[ _]pin=)(?P<name>[^ ]*)')
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class PinResolver:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, validate_aliases=True):
         self.validate_aliases = validate_aliases
         self.reserved = {}
         self.aliases = {}
         self.active_pins = {}
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def reserve_pin(self, pin, reserve_name):
         if pin in self.reserved and self.reserved[pin] != reserve_name:
             raise error("Pin %s reserved for %s - can't reserve for %s" % (
                 pin, self.reserved[pin], reserve_name))
         self.reserved[pin] = reserve_name
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def alias_pin(self, alias, pin):
         if alias in self.aliases and self.aliases[alias] != pin:
             raise error("Alias %s mapped to %s - can't alias to %s" % (
@@ -38,6 +61,12 @@ class PinResolver:
         for existing_alias, existing_pin in self.aliases.items():
             if existing_pin == alias:
                 self.aliases[existing_alias] = pin
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def update_command(self, cmd):
         def pin_fixup(m):
             name = m.group('name')
@@ -53,17 +82,29 @@ class PinResolver:
         return re_pin.sub(pin_fixup, cmd)
 
 
-######################################################################
-# Pin to chip mapping
-######################################################################
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class PrinterPins:
     error = error
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self):
         self.chips = {}
         self.active_pins = {}
         self.pin_resolvers = {}
         self.allow_multi_use_pins = {}
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def parse_pin(self, pin_desc, can_invert=False, can_pullup=False):
         desc = pin_desc.strip()
         pullup = invert = 0
@@ -93,6 +134,12 @@ class PrinterPins:
         pin_params = {'chip': self.chips[chip_name], 'chip_name': chip_name,
                       'pin': pin, 'invert': invert, 'pullup': pullup}
         return pin_params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def lookup_pin(self, pin_desc, can_invert=False, can_pullup=False,
                    share_type=None):
         pin_params = self.parse_pin(pin_desc, can_invert, can_pullup)
@@ -111,28 +158,63 @@ class PrinterPins:
         pin_params['share_type'] = share_type
         self.active_pins[share_name] = pin_params
         return pin_params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_pin(self, pin_type, pin_desc):
         can_invert = pin_type in ['endstop', 'digital_out', 'pwm']
         can_pullup = pin_type in ['endstop']
         pin_params = self.lookup_pin(pin_desc, can_invert, can_pullup)
         return pin_params['chip'].setup_pin(pin_type, pin_params)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def reset_pin_sharing(self, pin_params):
         share_name = "%s:%s" % (pin_params['chip_name'], pin_params['pin'])
         del self.active_pins[share_name]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_pin_resolver(self, chip_name):
         if chip_name not in self.pin_resolvers:
             raise error("Unknown chip name '%s'" % (chip_name,))
         return self.pin_resolvers[chip_name]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_chip(self, chip_name, chip):
         chip_name = chip_name.strip()
         if chip_name in self.chips:
             raise error("Duplicate chip name '%s'" % (chip_name,))
         self.chips[chip_name] = chip
         self.pin_resolvers[chip_name] = PinResolver()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def allow_multi_use_pin(self, pin_desc):
         pin_params = self.parse_pin(pin_desc)
         share_name = "%s:%s" % (pin_params['chip_name'], pin_params['pin'])
         self.allow_multi_use_pins[share_name] = True
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def add_printer_objects(config):
     config.get_printer().add_object('pins', PrinterPins())

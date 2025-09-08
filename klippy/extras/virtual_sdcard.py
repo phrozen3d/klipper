@@ -7,6 +7,9 @@ import os, logging, io
 
 VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
 
+sdcard_path_backup = ""
+subdir_path=""
+
 class VirtualSD:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -15,6 +18,8 @@ class VirtualSD:
         # sdcard state
         sd = config.get('path')
         self.sdcard_dirname = os.path.normpath(os.path.expanduser(sd))
+        global sdcard_path_backup
+        sdcard_path_backup = self.sdcard_dirname
         self.current_file = None
         self.file_position = self.file_size = 0
         # Print Stat Tracking
@@ -40,6 +45,9 @@ class VirtualSD:
         self.gcode.register_command(
             "SDCARD_PRINT_FILE", self.cmd_SDCARD_PRINT_FILE,
             desc=self.cmd_SDCARD_PRINT_FILE_help)
+        self.gcode.register_command(
+            "SDCARD_SELECT_FILE", self.cmd_SDCARD_SELECT_FILE,
+            desc=self.cmd_SDCARD_SELECT_FILE_help)
     def handle_shutdown(self):
         if self.work_timer is not None:
             self.must_pause_work = True
@@ -58,7 +66,22 @@ class VirtualSD:
         if self.work_timer is None:
             return False, ""
         return True, "sd_pos=%d" % (self.file_position,)
-    def get_file_list(self, check_subdirs=False):
+    def get_file_list(self, check_subdirs=False, path=""):
+        global sdcard_path_backup
+        global subdir_path
+        
+        if path == "system":    
+            subdir_path = ""
+            self.sdcard_dirname = sdcard_path_backup + subdir_path
+        elif path != "":
+            if os.path.exists(sdcard_path_backup + path):
+                subdir_path = path
+                self.sdcard_dirname = sdcard_path_backup + subdir_path
+            else:
+                return []
+            
+        
+        
         if check_subdirs:
             flist = []
             for root, dirs, files in os.walk(
@@ -72,7 +95,8 @@ class VirtualSD:
                     size = os.path.getsize(full_path)
                     flist.append((r_path, size))
             return sorted(flist, key=lambda f: f[0].lower())
-        else:
+        else:            
+            logging.info("sdcard_dirname:" + self.sdcard_dirname)
             dname = self.sdcard_dirname
             try:
                 filenames = os.listdir(self.sdcard_dirname)
@@ -149,6 +173,17 @@ class VirtualSD:
             filename = filename[1:]
         self._load_file(gcmd, filename, check_subdirs=True)
         self.do_resume()
+    cmd_SDCARD_SELECT_FILE_help = "Select a SD file.  May "\
+        "include files in subdirectories."
+    def cmd_SDCARD_SELECT_FILE(self, gcmd):
+        if self.work_timer is not None:
+            raise gcmd.error("SD busy")
+        self._reset_file()
+        filename = gcmd.get("FILENAME")
+        if filename[0] == '/':
+            filename = filename[1:]
+        self._load_file(gcmd, filename, check_subdirs=True)
+
     def cmd_M20(self, gcmd):
         # List SD card
         files = self.get_file_list()

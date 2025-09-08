@@ -1,19 +1,217 @@
-# Interface to Klipper micro-controller code
-#
-# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
 import sys, os, zlib, logging, math
 import serialhdl, msgproto, pins, chelper, clocksync
 
+
+
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class error(Exception):
     pass
 
+
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
+# Class to retry sending of a query command until a given response is received
+#发送未接收重发机制
+class RetryAsyncCommand:
+    #lancaigang231219：更改
+    #超时5秒
+    #TIMEOUT_TIME = 5.0
+    TIMEOUT_TIME = 10.0
+    #重发时间500毫秒
+    #RETRY_TIME = 0.500
+    RETRY_TIME = 1.0
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def __init__(self, serial, name, oid=None):
+        #喷头板串口
+        self.serial = serial
+        self.name = name
+        self.oid = oid
+        self.reactor = serial.get_reactor()
+        self.completion = self.reactor.completion()
+        self.min_query_time = self.reactor.monotonic()
+        #回调函数；接收数据处理
+        self.serial.register_response(self.handle_callback, name, oid)
+
+
+        # #printer.cfg配置文件
+        # self.G_PhrozenConfig = config
+        # self.G_PhrozenPrinter = config.get_printer()
+        # self.G_PhrozenReactor = self.G_PhrozenPrinter.get_reactor()
+        # #暂停恢复命令
+        # self.G_PhrozenPrinterCancelPauseResume = self.G_PhrozenPrinter.load_object(config, "pause_resume")
+        # #gcode命令
+        # self.G_PhrozenGCode = self.G_PhrozenPrinter.lookup_object("gcode")
+        # #响应fluidd信息
+        # self.G_PhrozenFluiddRespondInfo = self.G_PhrozenGCode.respond_info
+
+
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def handle_callback(self, params):
+        if params['#sent_time'] >= self.min_query_time:
+            self.min_query_time = self.reactor.NEVER
+            self.reactor.async_complete(self.completion, params)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def get_response(self, cmds, cmd_queue, minclock=0, reqclock=0):
+        cmd, = cmds
+        #响应ack
+        self.serial.raw_send_wait_ack(cmd, minclock, reqclock, cmd_queue)
+        first_query_time = query_time = self.reactor.monotonic()
+        while 1:
+            params = self.completion.wait(query_time + self.RETRY_TIME)
+            if params is not None:
+                self.serial.register_response(None, self.name, self.oid)
+                return params
+            query_time = self.reactor.monotonic()
+            #超时
+            if query_time > first_query_time + self.TIMEOUT_TIME:
+                self.serial.register_response(None, self.name, self.oid)
+                raise serialhdl.error("[(Phrozen)Klipper]Timeout on wait for '%s' response"
+                                      % (self.name,))
+            #喷头板串口发送
+            self.serial.raw_send(cmd, minclock, minclock, cmd_queue)
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
+# Wrapper around query commands
+#封装请求命令
+class CommandQueryWrapper:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def __init__(self, serial, msgformat, respformat, oid=None,
+                 cmd_queue=None, is_async=False, error=serialhdl.error):
+        #串口
+        self._serial = serial
+        self._cmd = serial.get_msgparser().lookup_command(msgformat)
+        serial.get_msgparser().lookup_command(respformat)
+        self._response = respformat.split()[0]
+        self._oid = oid
+        self._error = error
+        #发送重发
+        self._xmit_helper = serialhdl.SerialRetryCommand
+        if is_async:
+            self._xmit_helper = RetryAsyncCommand
+        if cmd_queue is None:
+            cmd_queue = serial.get_default_command_queue()
+        #发送命令队列
+        self._cmd_queue = cmd_queue
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def _do_send(self, cmds, minclock, reqclock):
+        xh = self._xmit_helper(self._serial, self._response, self._oid)
+        reqclock = max(minclock, reqclock)
+        try:
+            return xh.get_response(cmds, self._cmd_queue, minclock, reqclock)
+        except serialhdl.error as e:
+            raise self._error(str(e))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def send(self, data=(), minclock=0, reqclock=0):
+        #发送
+        return self._do_send([self._cmd.encode(data)], minclock, reqclock)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def send_with_preface(self, preface_cmd, preface_data=(), data=(),
+                          minclock=0, reqclock=0):
+        cmds = [preface_cmd._cmd.encode(preface_data), self._cmd.encode(data)]
+        return self._do_send(cmds, minclock, reqclock)
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
+# Wrapper around command sending
+class CommandWrapper:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def __init__(self, serial, msgformat, cmd_queue=None):
+        self._serial = serial
+        msgparser = serial.get_msgparser()
+        self._cmd = msgparser.lookup_command(msgformat)
+        if cmd_queue is None:
+            cmd_queue = serial.get_default_command_queue()
+        self._cmd_queue = cmd_queue
+        self._msgtag = msgparser.lookup_msgtag(msgformat) & 0xffffffff
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def send(self, data=(), minclock=0, reqclock=0):
+        cmd = self._cmd.encode(data)
+        self._serial.raw_send(cmd, minclock, reqclock, self._cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
+    def get_command_tag(self):
+        return self._msgtag
+
+
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU_trsync:
     REASON_ENDSTOP_HIT = 1
     REASON_COMMS_TIMEOUT = 2
     REASON_HOST_REQUEST = 3
     REASON_PAST_END_TIME = 4
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, mcu, trdispatch):
         self._mcu = mcu
         self._trdispatch = trdispatch
@@ -30,18 +228,54 @@ class MCU_trsync:
         mcu.register_config_callback(self._build_config)
         printer = mcu.get_printer()
         printer.register_event_handler("klippy:shutdown", self._shutdown)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_mcu(self):
         return self._mcu
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_oid(self):
         return self._oid
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_command_queue(self):
         return self._cmd_queue
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def add_stepper(self, stepper):
         if stepper in self._steppers:
             return
         self._steppers.append(stepper)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_steppers(self):
         return list(self._steppers)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config(self):
         mcu = self._mcu
         # Setup config
@@ -64,21 +298,35 @@ class MCU_trsync:
         self._stepper_stop_cmd = mcu.lookup_command(
             "stepper_stop_on_trigger oid=%c trsync_oid=%c", cq=self._cmd_queue)
         # Create trdispatch_mcu object
-        set_timeout_tag = mcu.lookup_command_tag(
-            "trsync_set_timeout oid=%c clock=%u")
-        trigger_tag = mcu.lookup_command_tag("trsync_trigger oid=%c reason=%c")
-        state_tag = mcu.lookup_command_tag(
+        set_timeout_tag = mcu.lookup_command(
+            "trsync_set_timeout oid=%c clock=%u").get_command_tag()
+        trigger_cmd = mcu.lookup_command("trsync_trigger oid=%c reason=%c")
+        trigger_tag = trigger_cmd.get_command_tag()
+        state_cmd = mcu.lookup_command(
             "trsync_state oid=%c can_trigger=%c trigger_reason=%c clock=%u")
+        state_tag = state_cmd.get_command_tag()
         ffi_main, ffi_lib = chelper.get_ffi()
         self._trdispatch_mcu = ffi_main.gc(ffi_lib.trdispatch_mcu_alloc(
-            self._trdispatch, mcu._serial.serialqueue, # XXX
+            self._trdispatch, mcu._serial.get_serialqueue(), # XXX
             self._cmd_queue, self._oid, set_timeout_tag, trigger_tag,
             state_tag), ffi_lib.free)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _shutdown(self):
         tc = self._trigger_completion
         if tc is not None:
             self._trigger_completion = None
             tc.complete(False)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_trsync_state(self, params):
         if not params['can_trigger']:
             tc = self._trigger_completion
@@ -93,6 +341,12 @@ class MCU_trsync:
                 self._home_end_clock = None
                 self._trsync_trigger_cmd.send([self._oid,
                                                self.REASON_PAST_END_TIME])
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def start(self, print_time, trigger_completion, expire_timeout):
         self._trigger_completion = trigger_completion
         self._home_end_clock = None
@@ -112,8 +366,20 @@ class MCU_trsync:
             self._stepper_stop_cmd.send([s.get_oid(), self._oid])
         self._trsync_set_timeout_cmd.send([self._oid, expire_clock],
                                           reqclock=expire_clock)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_home_end_time(self, home_end_time):
         self._home_end_clock = self._mcu.print_time_to_clock(home_end_time)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stop(self):
         self._mcu.register_response(None, "trsync_state", self._oid)
         self._trigger_completion = None
@@ -125,11 +391,20 @@ class MCU_trsync:
             s.note_homing_end()
         return params['trigger_reason']
 
-TRSYNC_TIMEOUT = 0.025
+TRSYNC_TIMEOUT = 0.1
 TRSYNC_SINGLE_MCU_TIMEOUT = 0.250
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU_endstop:
     RETRY_QUERY = 1.000
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, mcu, pin_params):
         self._mcu = mcu
         self._pin = pin_params['pin']
@@ -143,8 +418,20 @@ class MCU_endstop:
         ffi_main, ffi_lib = chelper.get_ffi()
         self._trdispatch = ffi_main.gc(ffi_lib.trdispatch_alloc(), ffi_lib.free)
         self._trsyncs = [MCU_trsync(mcu, self._trdispatch)]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_mcu(self):
         return self._mcu
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def add_stepper(self, stepper):
         trsyncs = {trsync.get_mcu(): trsync for trsync in self._trsyncs}
         trsync = trsyncs.get(stepper.get_mcu())
@@ -161,8 +448,20 @@ class MCU_endstop:
                         cerror = self._mcu.get_printer().config_error
                         raise cerror("Multi-mcu homing not supported on"
                                      " multi-mcu shared axis")
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_steppers(self):
         return [s for trsync in self._trsyncs for s in trsync.get_steppers()]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config(self):
         # Setup config
         self._mcu.add_config_cmd("config_endstop oid=%d pin=%s pull_up=%d"
@@ -181,6 +480,12 @@ class MCU_endstop:
             "endstop_query_state oid=%c",
             "endstop_state oid=%c homing=%c next_clock=%u pin_value=%c",
             oid=self._oid, cq=cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def home_start(self, print_time, sample_time, sample_count, rest_time,
                    triggered=True):
         clock = self._mcu.print_time_to_clock(print_time)
@@ -201,6 +506,12 @@ class MCU_endstop:
              sample_count, rest_ticks, triggered ^ self._invert,
              etrsync.get_oid(), etrsync.REASON_ENDSTOP_HIT], reqclock=clock)
         return self._trigger_completion
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def home_wait(self, home_end_time):
         etrsync = self._trsyncs[0]
         etrsync.set_home_end_time(home_end_time)
@@ -220,14 +531,29 @@ class MCU_endstop:
         params = self._query_cmd.send([self._oid])
         next_clock = self._mcu.clock32_to_clock64(params['next_clock'])
         return self._mcu.clock_to_print_time(next_clock - self._rest_ticks)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def query_endstop(self, print_time):
         clock = self._mcu.print_time_to_clock(print_time)
         if self._mcu.is_fileoutput():
             return 0
         params = self._query_cmd.send([self._oid], minclock=clock)
         return params['pin_value'] ^ self._invert
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU_digital_out:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, mcu, pin_params):
         self._mcu = mcu
         self._oid = None
@@ -239,27 +565,51 @@ class MCU_digital_out:
         self._max_duration = 2.
         self._last_clock = 0
         self._set_cmd = None
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_mcu(self):
         return self._mcu
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_max_duration(self, max_duration):
         self._max_duration = max_duration
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_start_value(self, start_value, shutdown_value, is_static=False):
         if is_static and start_value != shutdown_value:
-            raise pins.error("Static pin can not have shutdown value")
+            raise pins.error("[(Phrozen)Klipper]Static pin can not have shutdown value")
         self._start_value = (not not start_value) ^ self._invert
         self._shutdown_value = (not not shutdown_value) ^ self._invert
         self._is_static = is_static
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config(self):
         if self._is_static:
             self._mcu.add_config_cmd("set_digital_out pin=%s value=%d"
                                      % (self._pin, self._start_value))
             return
         if self._max_duration and self._start_value != self._shutdown_value:
-            raise pins.error("Pin with max duration must have start"
+            raise pins.error("[(Phrozen)Klipper]Pin with max duration must have start"
                              " value equal to shutdown value")
         mdur_ticks = self._mcu.seconds_to_clock(self._max_duration)
         if mdur_ticks >= 1<<31:
-            raise pins.error("Digital pin max duration too large")
+            raise pins.error("[(Phrozen)Klipper]Digital pin max duration too large")
         self._mcu.request_move_queue_slot()
         self._oid = self._mcu.create_oid()
         self._mcu.add_config_cmd(
@@ -272,13 +622,28 @@ class MCU_digital_out:
         cmd_queue = self._mcu.alloc_command_queue()
         self._set_cmd = self._mcu.lookup_command(
             "queue_digital_out oid=%c clock=%u on_ticks=%u", cq=cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_digital(self, print_time, value):
         clock = self._mcu.print_time_to_clock(print_time)
         self._set_cmd.send([self._oid, clock, (not not value) ^ self._invert],
                            minclock=self._last_clock, reqclock=clock)
         self._last_clock = clock
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU_pwm:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, mcu, pin_params):
         self._mcu = mcu
         self._hardware_pwm = False
@@ -295,23 +660,47 @@ class MCU_pwm:
         self._set_cmd = self._set_cycle_ticks = None
     def get_mcu(self):
         return self._mcu
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_max_duration(self, max_duration):
         self._max_duration = max_duration
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_cycle_time(self, cycle_time, hardware_pwm=False):
         self._cycle_time = cycle_time
         self._hardware_pwm = hardware_pwm
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_start_value(self, start_value, shutdown_value, is_static=False):
         if is_static and start_value != shutdown_value:
-            raise pins.error("Static pin can not have shutdown value")
+            raise pins.error("[(Phrozen)Klipper]Static pin can not have shutdown value")
         if self._invert:
             start_value = 1. - start_value
             shutdown_value = 1. - shutdown_value
         self._start_value = max(0., min(1., start_value))
         self._shutdown_value = max(0., min(1., shutdown_value))
         self._is_static = is_static
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config(self):
         if self._max_duration and self._start_value != self._shutdown_value:
-            raise pins.error("Pin with max duration must have start"
+            raise pins.error("[(Phrozen)Klipper]Pin with max duration must have start"
                              " value equal to shutdown value")
         cmd_queue = self._mcu.alloc_command_queue()
         curtime = self._mcu.get_printer().get_reactor().monotonic()
@@ -320,7 +709,7 @@ class MCU_pwm:
         cycle_ticks = self._mcu.seconds_to_clock(self._cycle_time)
         mdur_ticks = self._mcu.seconds_to_clock(self._max_duration)
         if mdur_ticks >= 1<<31:
-            raise pins.error("PWM pin max duration too large")
+            raise pins.error("[(Phrozen)Klipper]PWM pin max duration too large")
         if self._hardware_pwm:
             self._pwm_max = self._mcu.get_constant_float("PWM_MAX")
             if self._is_static:
@@ -346,13 +735,13 @@ class MCU_pwm:
             return
         # Software PWM
         if self._shutdown_value not in [0., 1.]:
-            raise pins.error("shutdown value must be 0.0 or 1.0 on soft pwm")
+            raise pins.error("[(Phrozen)Klipper]shutdown value must be 0.0 or 1.0 on soft pwm")
         if self._is_static:
             self._mcu.add_config_cmd("set_digital_out pin=%s value=%d"
                                      % (self._pin, self._start_value >= 0.5))
             return
         if cycle_ticks >= 1<<31:
-            raise pins.error("PWM pin cycle time too large")
+            raise pins.error("[(Phrozen)Klipper]PWM pin cycle time too large")
         self._mcu.request_move_queue_slot()
         self._oid = self._mcu.create_oid()
         self._mcu.add_config_cmd(
@@ -372,6 +761,12 @@ class MCU_pwm:
             "queue_digital_out oid=%c clock=%u on_ticks=%u", cq=cmd_queue)
         self._set_cycle_ticks = self._mcu.lookup_command(
             "set_digital_out_pwm_cycle oid=%c cycle_ticks=%u", cq=cmd_queue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def set_pwm(self, print_time, value, cycle_time=None):
         clock = self._mcu.print_time_to_clock(print_time)
         minclock = self._last_clock
@@ -397,8 +792,17 @@ class MCU_pwm:
         on_ticks = int(max(0., min(1., value)) * float(cycle_ticks) + 0.5)
         self._set_cmd.send([self._oid, clock, on_ticks],
                            minclock=minclock, reqclock=clock)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU_adc:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, mcu, pin_params):
         self._mcu = mcu
         self._pin = pin_params['pin']
@@ -410,8 +814,20 @@ class MCU_adc:
         self._oid = self._callback = None
         self._mcu.register_config_callback(self._build_config)
         self._inv_max_adc = 0.
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_mcu(self):
         return self._mcu
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_minmax(self, sample_time, sample_count,
                      minval=0., maxval=1., range_check_count=0):
         self._sample_time = sample_time
@@ -419,11 +835,29 @@ class MCU_adc:
         self._min_sample = minval
         self._max_sample = maxval
         self._range_check_count = range_check_count
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def setup_adc_callback(self, report_time, callback):
         self._report_time = report_time
         self._callback = callback
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_last_value(self):
         return self._last_state
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config(self):
         if not self._sample_count:
             return
@@ -447,6 +881,12 @@ class MCU_adc:
                 self._range_check_count), is_init=True)
         self._mcu.register_response(self._handle_analog_in_state,
                                     "analog_in_state", self._oid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_analog_in_state(self, params):
         last_value = params['value'] * self._inv_max_adc
         next_clock = self._mcu.clock32_to_clock64(params['next_clock'])
@@ -456,82 +896,19 @@ class MCU_adc:
         if self._callback is not None:
             self._callback(last_read_time, last_value)
 
-# Class to retry sending of a query command until a given response is received
-class RetryAsyncCommand:
-    TIMEOUT_TIME = 5.0
-    RETRY_TIME = 0.500
-    def __init__(self, serial, name, oid=None):
-        self.serial = serial
-        self.name = name
-        self.oid = oid
-        self.reactor = serial.get_reactor()
-        self.completion = self.reactor.completion()
-        self.min_query_time = self.reactor.monotonic()
-        self.serial.register_response(self.handle_callback, name, oid)
-    def handle_callback(self, params):
-        if params['#sent_time'] >= self.min_query_time:
-            self.min_query_time = self.reactor.NEVER
-            self.reactor.async_complete(self.completion, params)
-    def get_response(self, cmds, cmd_queue, minclock=0, reqclock=0):
-        cmd, = cmds
-        self.serial.raw_send_wait_ack(cmd, minclock, reqclock, cmd_queue)
-        first_query_time = query_time = self.reactor.monotonic()
-        while 1:
-            params = self.completion.wait(query_time + self.RETRY_TIME)
-            if params is not None:
-                self.serial.register_response(None, self.name, self.oid)
-                return params
-            query_time = self.reactor.monotonic()
-            if query_time > first_query_time + self.TIMEOUT_TIME:
-                self.serial.register_response(None, self.name, self.oid)
-                raise serialhdl.error("Timeout on wait for '%s' response"
-                                      % (self.name,))
-            self.serial.raw_send(cmd, minclock, minclock, cmd_queue)
 
-# Wrapper around query commands
-class CommandQueryWrapper:
-    def __init__(self, serial, msgformat, respformat, oid=None,
-                 cmd_queue=None, is_async=False, error=serialhdl.error):
-        self._serial = serial
-        self._cmd = serial.get_msgparser().lookup_command(msgformat)
-        serial.get_msgparser().lookup_command(respformat)
-        self._response = respformat.split()[0]
-        self._oid = oid
-        self._error = error
-        self._xmit_helper = serialhdl.SerialRetryCommand
-        if is_async:
-            self._xmit_helper = RetryAsyncCommand
-        if cmd_queue is None:
-            cmd_queue = serial.get_default_command_queue()
-        self._cmd_queue = cmd_queue
-    def _do_send(self, cmds, minclock, reqclock):
-        xh = self._xmit_helper(self._serial, self._response, self._oid)
-        reqclock = max(minclock, reqclock)
-        try:
-            return xh.get_response(cmds, self._cmd_queue, minclock, reqclock)
-        except serialhdl.error as e:
-            raise self._error(str(e))
-    def send(self, data=(), minclock=0, reqclock=0):
-        return self._do_send([self._cmd.encode(data)], minclock, reqclock)
-    def send_with_preface(self, preface_cmd, preface_data=(), data=(),
-                          minclock=0, reqclock=0):
-        cmds = [preface_cmd._cmd.encode(preface_data), self._cmd.encode(data)]
-        return self._do_send(cmds, minclock, reqclock)
-
-# Wrapper around command sending
-class CommandWrapper:
-    def __init__(self, serial, msgformat, cmd_queue=None):
-        self._serial = serial
-        self._cmd = serial.get_msgparser().lookup_command(msgformat)
-        if cmd_queue is None:
-            cmd_queue = serial.get_default_command_queue()
-        self._cmd_queue = cmd_queue
-    def send(self, data=(), minclock=0, reqclock=0):
-        cmd = self._cmd.encode(data)
-        self._serial.raw_send(cmd, minclock, reqclock, self._cmd_queue)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class MCU:
     error = error
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, config, clocksync):
         self._printer = printer = config.get_printer()
         self._clocksync = clocksync
@@ -597,6 +974,16 @@ class MCU:
         printer.register_event_handler("klippy:connect", self._connect)
         printer.register_event_handler("klippy:shutdown", self._shutdown)
         printer.register_event_handler("klippy:disconnect", self._disconnect)
+
+        #lancaigang231219：
+        self.G_PhrozenGCode = printer.lookup_object("gcode")
+        self.G_PhrozenFluiddRespondInfo = self.G_PhrozenGCode.respond_info
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Serial callbacks
     def _handle_mcu_stats(self, params):
         count = params['count']
@@ -607,6 +994,12 @@ class MCU:
         diff = count*tick_sumsq - tick_sum**2
         self._mcu_tick_stddev = c * math.sqrt(max(0., diff))
         self._mcu_tick_awake = tick_sum / self._mcu_freq
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_shutdown(self, params):
         if self._is_shutdown:
             return
@@ -615,17 +1008,29 @@ class MCU:
         if clock is not None:
             self._shutdown_clock = self.clock32_to_clock64(clock)
         self._shutdown_msg = msg = params['static_string_id']
-        logging.info("MCU '%s' %s: %s\n%s\n%s", self._name, params['#name'],
+        logging.info("[(Phrozen)Klipper]MCU '%s' %s: %s\n%s\n%s", self._name, params['#name'],
                      self._shutdown_msg, self._clocksync.dump_debug(),
                      self._serial.dump_debug())
         prefix = "MCU '%s' shutdown: " % (self._name,)
         if params['#name'] == 'is_shutdown':
             prefix = "Previous MCU '%s' shutdown: " % (self._name,)
         self._printer.invoke_async_shutdown(prefix + msg + error_help(msg))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_starting(self, params):
         if not self._is_shutdown:
             self._printer.invoke_async_shutdown("MCU '%s' spontaneous restart"
                                                 % (self._name,))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Connection phase
     def _check_restart(self, reason):
         start_reason = self._printer.get_start_args().get("start_reason")
@@ -635,7 +1040,13 @@ class MCU:
                      self._name, reason)
         self._printer.request_exit('firmware_restart')
         self._reactor.pause(self._reactor.monotonic() + 2.000)
-        raise error("Attempt MCU '%s' restart failed" % (self._name,))
+        raise error("[(Phrozen)Klipper]Attempt MCU '%s' restart failed" % (self._name,))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _connect_file(self, pace=False):
         # In a debugging mode.  Open debug output file and read data dictionary
         start_args = self._printer.get_start_args()
@@ -656,6 +1067,12 @@ class MCU:
             def dummy_estimated_print_time(eventtime):
                 return 0.
             self.estimated_print_time = dummy_estimated_print_time
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _send_config(self, prev_crc):
         # Build config commands
         for cb in self._config_callbacks:
@@ -675,7 +1092,7 @@ class MCU:
         self.add_config_cmd("finalize_config crc=%d" % (config_crc,))
         if prev_crc is not None and config_crc != prev_crc:
             self._check_restart("CRC mismatch")
-            raise error("MCU '%s' CRC does not match config" % (self._name,))
+            raise error("[(Phrozen)Klipper]MCU '%s' CRC does not match config" % (self._name,))
         # Transmit config messages (if needed)
         self.register_response(self._handle_starting, 'starting')
         try:
@@ -698,6 +1115,12 @@ class MCU:
                     "Pin '%s' is not a valid pin name on mcu '%s'"
                     % (enum_value, self._name))
             raise
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _send_get_config(self):
         get_config_cmd = self.lookup_query_command(
             "get_config",
@@ -706,12 +1129,18 @@ class MCU:
             return { 'is_config': 0, 'move_count': 500, 'crc': 0 }
         config_params = get_config_cmd.send()
         if self._is_shutdown:
-            raise error("MCU '%s' error during config: %s" % (
+            raise error("[(Phrozen)Klipper]MCU '%s' error during config: %s" % (
                 self._name, self._shutdown_msg))
         if config_params['is_shutdown']:
-            raise error("Can not update MCU '%s' config as it is shutdown" % (
+            raise error("[(Phrozen)Klipper]Can not update MCU '%s' config as it is shutdown" % (
                 self._name,))
         return config_params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _log_info(self):
         msgparser = self._serial.get_msgparser()
         message_count = len(msgparser.get_messages())
@@ -722,6 +1151,12 @@ class MCU:
             "MCU '%s' config: %s" % (self._name, " ".join(
                 ["%s=%s" % (k, v) for k, v in self.get_constants().items()]))]
         return "\n".join(log_info)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _connect(self):
         config_params = self._send_get_config()
         if not config_params['is_config']:
@@ -732,21 +1167,21 @@ class MCU:
             self._send_config(None)
             config_params = self._send_get_config()
             if not config_params['is_config'] and not self.is_fileoutput():
-                raise error("Unable to configure MCU '%s'" % (self._name,))
+                raise error("[(Phrozen)Klipper]Unable to configure MCU '%s'" % (self._name,))
         else:
             start_reason = self._printer.get_start_args().get("start_reason")
             if start_reason == 'firmware_restart':
-                raise error("Failed automated reset of MCU '%s'"
+                raise error("[(Phrozen)Klipper]Failed automated reset of MCU '%s'"
                             % (self._name,))
             # Already configured - send init commands
             self._send_config(config_params['crc'])
         # Setup steppersync with the move_count returned by get_config
         move_count = config_params['move_count']
         if move_count < self._reserved_move_slots:
-            raise error("Too few moves available on MCU '%s'" % (self._name,))
+            raise error("[(Phrozen)Klipper]Too few moves available on MCU '%s'" % (self._name,))
         ffi_main, ffi_lib = chelper.get_ffi()
         self._steppersync = ffi_main.gc(
-            ffi_lib.steppersync_alloc(self._serial.serialqueue,
+            ffi_lib.steppersync_alloc(self._serial.get_serialqueue(),
                                       self._stepqueues, len(self._stepqueues),
                                       move_count-self._reserved_move_slots),
             ffi_lib.steppersync_free)
@@ -756,6 +1191,12 @@ class MCU:
         logging.info(move_msg)
         log_info = self._log_info() + "\n" + move_msg
         self._printer.set_rollover_info(self._name, log_info, log=False)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _mcu_identify(self):
         if self.is_fileoutput():
             self._connect_file()
@@ -808,18 +1249,42 @@ class MCU:
         self.register_response(self._handle_shutdown, 'shutdown')
         self.register_response(self._handle_shutdown, 'is_shutdown')
         self.register_response(self._handle_mcu_stats, 'stats')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Config creation helpers
     def setup_pin(self, pin_type, pin_params):
         pcs = {'endstop': MCU_endstop,
                'digital_out': MCU_digital_out, 'pwm': MCU_pwm, 'adc': MCU_adc}
         if pin_type not in pcs:
-            raise pins.error("pin type %s not supported on mcu" % (pin_type,))
+            raise pins.error("[(Phrozen)Klipper]pin type %s not supported on mcu" % (pin_type,))
         return pcs[pin_type](self, pin_params)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def create_oid(self):
         self._oid_count += 1
         return self._oid_count - 1
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_config_callback(self, cb):
         self._config_callbacks.append(cb)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def add_config_cmd(self, cmd, is_init=False, on_restart=False):
         if is_init:
             self._init_cmds.append(cmd)
@@ -827,72 +1292,213 @@ class MCU:
             self._restart_cmds.append(cmd)
         else:
             self._config_cmds.append(cmd)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_query_slot(self, oid):
         slot = self.seconds_to_clock(oid * .01)
         t = int(self.estimated_print_time(self._reactor.monotonic()) + 1.5)
         return self.print_time_to_clock(t) + slot
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_stepqueue(self, stepqueue):
         self._stepqueues.append(stepqueue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def request_move_queue_slot(self):
         self._reserved_move_slots += 1
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def seconds_to_clock(self, time):
         return int(time * self._mcu_freq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_max_stepper_error(self):
         return self._max_stepper_error
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Wrapper functions
     def get_printer(self):
         return self._printer
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_name(self):
         return self._name
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_response(self, cb, msg, oid=None):
         self._serial.register_response(cb, msg, oid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def alloc_command_queue(self):
         return self._serial.alloc_command_queue()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def lookup_command(self, msgformat, cq=None):
         return CommandWrapper(self._serial, msgformat, cq)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def lookup_query_command(self, msgformat, respformat, oid=None,
                              cq=None, is_async=False):
         return CommandQueryWrapper(self._serial, msgformat, respformat, oid,
                                    cq, is_async, self._printer.command_error)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def try_lookup_command(self, msgformat):
         try:
             return self.lookup_command(msgformat)
         except self._serial.get_msgparser().error as e:
             return None
-    def lookup_command_tag(self, msgformat):
-        all_msgs = self._serial.get_msgparser().get_messages()
-        return {fmt: msgtag for msgtag, msgtype, fmt in all_msgs}[msgformat]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_enumerations(self):
         return self._serial.get_msgparser().get_enumerations()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_constants(self):
         return self._serial.get_msgparser().get_constants()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_constant_float(self, name):
         return self._serial.get_msgparser().get_constant_float(name)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def print_time_to_clock(self, print_time):
         return self._clocksync.print_time_to_clock(print_time)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def clock_to_print_time(self, clock):
         return self._clocksync.clock_to_print_time(clock)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def estimated_print_time(self, eventtime):
         return self._clocksync.estimated_print_time(eventtime)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def clock32_to_clock64(self, clock32):
         return self._clocksync.clock32_to_clock64(clock32)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Restarts
     def _disconnect(self):
         self._serial.disconnect()
         self._steppersync = None
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _shutdown(self, force=False):
         if (self._emergency_stop_cmd is None
             or (self._is_shutdown and not force)):
             return
         self._emergency_stop_cmd.send()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _restart_arduino(self):
         logging.info("Attempting MCU '%s' reset", self._name)
         self._disconnect()
         serialhdl.arduino_reset(self._serialport, self._reactor)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _restart_cheetah(self):
         logging.info("Attempting MCU '%s' Cheetah-style reset", self._name)
         self._disconnect()
         serialhdl.cheetah_reset(self._serialport, self._reactor)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _restart_via_command(self):
         if ((self._reset_cmd is None and self._config_reset_cmd is None)
             or not self._clocksync.is_active()):
@@ -912,12 +1518,24 @@ class MCU:
             self._reset_cmd.send()
         self._reactor.pause(self._reactor.monotonic() + 0.015)
         self._disconnect()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _restart_rpi_usb(self):
         logging.info("Attempting MCU '%s' reset via rpi usb power", self._name)
         self._disconnect()
         chelper.run_hub_ctrl(0)
         self._reactor.pause(self._reactor.monotonic() + 2.)
         chelper.run_hub_ctrl(1)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _firmware_restart(self, force=False):
         if self._is_mcu_bridge and not force:
             return
@@ -929,15 +1547,45 @@ class MCU:
             self._restart_cheetah()
         else:
             self._restart_arduino()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _firmware_restart_bridge(self):
         self._firmware_restart(True)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Misc external commands
     def is_fileoutput(self):
         return self._printer.get_start_args().get('debugoutput') is not None
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def is_shutdown(self):
         return self._is_shutdown
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_shutdown_clock(self):
         return self._shutdown_clock
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def flush_moves(self, print_time):
         if self._steppersync is None:
             return
@@ -946,8 +1594,14 @@ class MCU:
             return
         ret = self._ffi_lib.steppersync_flush(self._steppersync, clock)
         if ret:
-            raise error("Internal error in MCU '%s' stepcompress"
+            raise error("[(Phrozen)Klipper]Internal error in MCU '%s' stepcompress"
                         % (self._name,))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def check_active(self, print_time, eventtime):
         if self._steppersync is None:
             return
@@ -956,25 +1610,42 @@ class MCU:
         if (self._clocksync.is_active() or self.is_fileoutput()
             or self._is_timeout):
             return
-        self._is_timeout = True
+        #self._is_timeout = True
         logging.info("Timeout with MCU '%s' (eventtime=%f)",
                      self._name, eventtime)
-        self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
-            self._name,))
+        #self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
+        #    self._name,))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_status(self, eventtime=None):
         return dict(self._get_status_info)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
-        load = "mcu_awake=%.03f mcu_task_avg=%.06f mcu_task_stddev=%.06f" % (
+        load = "[(Klipper)mcu.py]klipper与喷头板通信心跳包；mcu_awake=%.03f mcu_task_avg=%.06f mcu_task_stddev=%.06f" % (
             self._mcu_tick_awake, self._mcu_tick_avg, self._mcu_tick_stddev)
         stats = ' '.join([load, self._serial.stats(eventtime),
                           self._clocksync.stats(eventtime)])
         parts = [s.split('=', 1) for s in stats.split()]
         last_stats = {k:(float(v) if '.' in v else int(v)) for k, v in parts}
         self._get_status_info['last_stats'] = last_stats
+        #lancaigang231219:log打印
+        #logging.info(stats)
+        #self.G_PhrozenFluiddRespondInfo(stats)
+
+        
         return False, '%s: %s' % (self._name, stats)
 
 Common_MCU_errors = {
-    ("Timer too close",): """
+    ("[(Phrozen)Klipper]Timer too close",): """
 This often indicates the host computer is overloaded. Check
 for other processes consuming excessive CPU time, high swap
 usage, disk errors, overheating, unstable voltage, or
@@ -993,23 +1664,43 @@ obtaining.""",
 This generally occurs in response to an M112 G-Code command
 or in response to an internal error in the host software.""",
 }
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def error_help(msg):
     for prefixes, help_msg in Common_MCU_errors.items():
         for prefix in prefixes:
             if msg.startswith(prefix):
                 return help_msg
     return ""
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def add_printer_objects(config):
     printer = config.get_printer()
     reactor = printer.get_reactor()
     mainsync = clocksync.ClockSync(reactor)
     printer.add_object('mcu', MCU(config.getsection('mcu'), mainsync))
+
+    # G_PhrozenGCode = printer.lookup_object("gcode")
+    # G_PhrozenFluiddRespondInfo = G_PhrozenGCode.respond_info
+    # G_PhrozenFluiddRespondInfo("[(mcu.py)add_printer_objects]printer添加mcu")
+
     for s in config.get_prefix_sections('mcu '):
         printer.add_object(s.section, MCU(
             s, clocksync.SecondarySync(reactor, mainsync)))
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def get_printer_mcu(printer, name):
     if name == 'mcu':
         return printer.lookup_object(name)

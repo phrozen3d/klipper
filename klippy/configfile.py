@@ -1,26 +1,60 @@
-# Code for reading and writing the Klipper config file
-#
-# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import sys, os, glob, re, time, logging, configparser, io
 
 error = configparser.Error
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class sentinel:
     pass
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class ConfigWrapper:
     error = configparser.Error
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer, fileconfig, access_tracking, section):
         self.printer = printer
         self.fileconfig = fileconfig
         self.access_tracking = access_tracking
         self.section = section
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_printer(self):
         return self.printer
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_name(self):
         return self.section
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _get_wrapper(self, parser, option, default, minval=None, maxval=None,
                      above=None, below=None, note_valid=True):
         if not self.fileconfig.has_option(self.section, option):
@@ -53,21 +87,51 @@ class ConfigWrapper:
             raise self.error("Option '%s' in section '%s' must be below %s"
                              % (option, self.section, below))
         return v
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get(self, option, default=sentinel, note_valid=True):
         return self._get_wrapper(self.fileconfig.get, option, default,
                                  note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getint(self, option, default=sentinel, minval=None, maxval=None,
                note_valid=True):
         return self._get_wrapper(self.fileconfig.getint, option, default,
                                  minval, maxval, note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getfloat(self, option, default=sentinel, minval=None, maxval=None,
                  above=None, below=None, note_valid=True):
         return self._get_wrapper(self.fileconfig.getfloat, option, default,
                                  minval, maxval, above, below,
                                  note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getboolean(self, option, default=sentinel, note_valid=True):
         return self._get_wrapper(self.fileconfig.getboolean, option, default,
                                  note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getchoice(self, option, choices, default=sentinel, note_valid=True):
         if choices and type(list(choices.keys())[0]) == int:
             c = self.getint(option, default, note_valid=note_valid)
@@ -77,14 +141,24 @@ class ConfigWrapper:
             raise error("Choice '%s' for option '%s' in section '%s'"
                         " is not a valid choice" % (c, option, self.section))
         return choices[c]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getlists(self, option, default=sentinel, seps=(',',), count=None,
                  parser=str, note_valid=True):
         def lparser(value, pos):
+            if len(value.strip()) == 0:
+                # Return an empty list instead of [''] for empty string
+                parts = []
+            else:
+                parts = [p.strip() for p in value.split(seps[pos])]
             if pos:
                 # Nested list
-                parts = [p.strip() for p in value.split(seps[pos])]
                 return tuple([lparser(p, pos - 1) for p in parts if p])
-            res = [parser(p.strip()) for p in value.split(seps[pos])]
+            res = [parser(p) for p in parts]
             if count is not None and len(res) != count:
                 raise error("Option '%s' in section '%s' must have %d elements"
                             % (option, self.section, count))
@@ -93,29 +167,77 @@ class ConfigWrapper:
             return lparser(self.fileconfig.get(section, option), len(seps) - 1)
         return self._get_wrapper(fcparser, option, default,
                                  note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getlist(self, option, default=sentinel, sep=',', count=None,
                 note_valid=True):
         return self.getlists(option, default, seps=(sep,), count=count,
                              parser=str, note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getintlist(self, option, default=sentinel, sep=',', count=None,
                    note_valid=True):
         return self.getlists(option, default, seps=(sep,), count=count,
                              parser=int, note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getfloatlist(self, option, default=sentinel, sep=',', count=None,
                      note_valid=True):
         return self.getlists(option, default, seps=(sep,), count=count,
                              parser=float, note_valid=note_valid)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def getsection(self, section):
         return ConfigWrapper(self.printer, self.fileconfig,
                              self.access_tracking, section)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def has_section(self, section):
         return self.fileconfig.has_section(section)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_prefix_sections(self, prefix):
         return [self.getsection(s) for s in self.fileconfig.sections()
                 if s.startswith(prefix)]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_prefix_options(self, prefix):
         return [o for o in self.fileconfig.options(self.section)
                 if o.startswith(prefix)]
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def deprecate(self, option, value=None):
         if not self.fileconfig.has_option(self.section, option):
             return
@@ -133,8 +255,17 @@ AUTOSAVE_HEADER = """
 #*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.
 #*#
 """
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class PrinterConfig:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         self.autosave = None
@@ -147,8 +278,20 @@ class PrinterConfig:
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command("SAVE_CONFIG", self.cmd_SAVE_CONFIG,
                                desc=self.cmd_SAVE_CONFIG_help)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_printer(self):
         return self.printer
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _read_config_file(self, filename):
         try:
             f = open(filename, 'r')
@@ -159,6 +302,12 @@ class PrinterConfig:
             logging.exception(msg)
             raise error(msg)
         return data.replace('\r\n', '\n')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _find_autosave_data(self, data):
         regular_data = data
         autosave_data = ""
@@ -184,6 +333,12 @@ class PrinterConfig:
         return regular_data, "\n".join(out)
     comment_r = re.compile('[#;].*$')
     value_r = re.compile('[^A-Za-z0-9_].*$')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _strip_duplicates(self, data, config):
         fileconfig = config.fileconfig
         # Comment out fields in 'data' that are defined in 'config'
@@ -207,6 +362,12 @@ class PrinterConfig:
                 is_dup_field = True
                 lines[lineno] = '#' + lines[lineno]
         return "\n".join(lines)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _parse_config_buffer(self, buffer, filename, fileconfig):
         if not buffer:
             return
@@ -214,6 +375,12 @@ class PrinterConfig:
         del buffer[:]
         sbuffer = io.StringIO(data)
         fileconfig.readfp(sbuffer, filename)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _resolve_include(self, source_filename, include_spec, fileconfig,
                          visited):
         dirname = os.path.dirname(source_filename)
@@ -229,6 +396,12 @@ class PrinterConfig:
             self._parse_config(include_data, include_filename, fileconfig,
                                visited)
         return include_filenames
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _parse_config(self, data, filename, fileconfig, visited):
         path = os.path.abspath(filename)
         if path in visited:
@@ -255,6 +428,12 @@ class PrinterConfig:
                 buffer.append(line)
         self._parse_config_buffer(buffer, filename, fileconfig)
         visited.remove(path)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config_wrapper(self, data, filename):
         if sys.version_info.major >= 3:
             fileconfig = configparser.RawConfigParser(
@@ -263,13 +442,31 @@ class PrinterConfig:
             fileconfig = configparser.RawConfigParser()
         self._parse_config(data, filename, fileconfig, set())
         return ConfigWrapper(self.printer, fileconfig, {}, 'printer')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_config_string(self, config):
         sfile = io.StringIO()
         config.fileconfig.write(sfile)
         return sfile.getvalue().strip()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def read_config(self, filename):
         return self._build_config_wrapper(self._read_config_file(filename),
                                           filename)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def read_main_config(self):
         filename = self.printer.get_start_args()['config_file']
         data = self._read_config_file(filename)
@@ -279,6 +476,12 @@ class PrinterConfig:
         self.autosave = self._build_config_wrapper(autosave_data, filename)
         cfg = self._build_config_wrapper(regular_data + autosave_data, filename)
         return cfg
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def check_unused_options(self, config):
         fileconfig = config.fileconfig
         objects = dict(self.printer.lookup_objects())
@@ -301,14 +504,32 @@ class PrinterConfig:
                                 % (option, section))
         # Setup get_status()
         self._build_status(config)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def log_config(self, config):
         lines = ["===== Config file =====",
                  self._build_config_string(config),
                  "======================="]
         self.printer.set_rollover_info("config", "\n".join(lines))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Status reporting
     def deprecate(self, section, option, value=None, msg=None):
         self.deprecated[(section, option, value)] = msg
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _build_status(self, config):
         self.status_raw_config.clear()
         for section in config.get_prefix_sections(''):
@@ -328,12 +549,24 @@ class PrinterConfig:
             res['section'] = section
             res['option'] = option
             self.status_warnings.append(res)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_status(self, eventtime):
         return {'config': self.status_raw_config,
                 'settings': self.status_settings,
                 'warnings': self.status_warnings,
                 'save_config_pending': self.save_config_pending,
                 'save_config_pending_items': self.status_save_pending}
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Autosave functions
     def set(self, section, option, value):
         if not self.autosave.fileconfig.has_section(section):
@@ -349,6 +582,12 @@ class PrinterConfig:
         self.status_save_pending = pending
         self.save_config_pending = True
         logging.info("save_config: set [%s] %s = %s", section, option, svalue)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def remove_section(self, section):
         if self.autosave.fileconfig.has_section(section):
             self.autosave.fileconfig.remove_section(section)
@@ -362,6 +601,12 @@ class PrinterConfig:
             del pending[section]
             self.status_save_pending = pending
             self.save_config_pending = True
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _disallow_include_conflicts(self, regular_data, cfgname, gcode):
         config = self._build_config_wrapper(regular_data, cfgname)
         for section in self.autosave.fileconfig.sections():
@@ -371,6 +616,12 @@ class PrinterConfig:
                            "with included value" % (section, option))
                     raise gcode.error(msg)
     cmd_SAVE_CONFIG_help = "Overwrite config file and restart"
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_SAVE_CONFIG(self, gcmd):
         if not self.autosave.fileconfig.sections():
             return

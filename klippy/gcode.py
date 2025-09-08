@@ -1,17 +1,33 @@
-# Parse gcode commands
-#
-# Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
-import os, re, logging, collections, shlex
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
 
+
+import os, re, logging, collections, shlex
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class CommandError(Exception):
     pass
 
 Coord = collections.namedtuple('Coord', ('x', 'y', 'z', 'e'))
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 class GCodeCommand:
     error = CommandError
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, gcode, command, commandline, params, need_ack):
         self._command = command
         self._commandline = commandline
@@ -20,12 +36,36 @@ class GCodeCommand:
         # Method wrappers
         self.respond_info = gcode.respond_info
         self.respond_raw = gcode.respond_raw
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_command(self):
         return self._command
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_commandline(self):
         return self._commandline
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_command_parameters(self):
         return self._params
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_raw_command_parameters(self):
         command = self._command
         if command.startswith("M117 ") or command.startswith("M118 "):
@@ -41,6 +81,12 @@ class GCodeCommand:
         if rawparams.startswith(' '):
             rawparams = rawparams[1:]
         return rawparams
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def ack(self, msg=None):
         if not self._need_ack:
             return False
@@ -52,6 +98,12 @@ class GCodeCommand:
         return True
     # Parameter parsing helpers
     class sentinel: pass
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get(self, name, default=sentinel, parser=str, minval=None, maxval=None,
             above=None, below=None):
         value = self._params.get(name)
@@ -78,17 +130,38 @@ class GCodeCommand:
             raise self.error("Error on '%s': %s must be below %s"
                              % (self._commandline, name, below))
         return value
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_int(self, name, default=sentinel, minval=None, maxval=None):
         return self.get(name, default, parser=int, minval=minval, maxval=maxval)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_float(self, name, default=sentinel, minval=None, maxval=None,
                   above=None, below=None):
         return self.get(name, default, parser=float, minval=minval,
                         maxval=maxval, above=above, below=below)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 # Parse and dispatch G-Code commands
 class GCodeDispatch:
     error = CommandError
     Coord = Coord
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         self.is_fileinput = not not printer.get_start_args().get("debuginput")
@@ -111,6 +184,12 @@ class GCodeDispatch:
             func = getattr(self, 'cmd_' + cmd)
             desc = getattr(self, 'cmd_' + cmd + '_help', None)
             self.register_command(cmd, func, True, desc)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def is_traditional_gcode(self, cmd):
         # A "traditional" g-code command is a letter and followed by a number
         try:
@@ -119,6 +198,12 @@ class GCodeDispatch:
             return cmd[0].isupper() and cmd[1].isdigit()
         except:
             return False
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_command(self, cmd, func, when_not_ready=False, desc=None):
         if func is None:
             old_cmd = self.ready_gcode_handlers.get(cmd)
@@ -138,6 +223,12 @@ class GCodeDispatch:
             self.base_gcode_handlers[cmd] = func
         if desc is not None:
             self.gcode_help[cmd] = desc
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_mux_command(self, cmd, key, value, func, desc=None):
         prev = self.mux_commands.get(cmd)
         if prev is None:
@@ -154,24 +245,60 @@ class GCodeDispatch:
                 "mux command %s %s %s already registered (%s)" % (
                     cmd, key, value, prev_values))
         prev_values[value] = func
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_command_help(self):
         return dict(self.gcode_help)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def register_output_handler(self, cb):
         self.output_callbacks.append(cb)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_shutdown(self):
         if not self.is_printer_ready:
             return
         self.is_printer_ready = False
         self.gcode_handlers = self.base_gcode_handlers
         self._respond_state("Shutdown")
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_disconnect(self):
         self._respond_state("Disconnect")
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_ready(self):
         self.is_printer_ready = True
         self.gcode_handlers = self.ready_gcode_handlers
         self._respond_state("Ready")
     # Parse input into commands
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _process_commands(self, commands, need_ack=True):
         for line in commands:
             # Ignore comments and leading/trailing spaces
@@ -209,24 +336,66 @@ class GCodeDispatch:
                 if not need_ack:
                     raise
             gcmd.ack()
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def run_script_from_command(self, script):
         self._process_commands(script.split('\n'), need_ack=False)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def run_script(self, script):
         with self.mutex:
             self._process_commands(script.split('\n'), need_ack=False)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def get_mutex(self):
         return self.mutex
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def create_gcode_command(self, command, commandline, params):
         return GCodeCommand(self, command, commandline, params, False)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Response handling
     def respond_raw(self, msg):
         for cb in self.output_callbacks:
             cb(msg)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def respond_info(self, msg, log=True):
         if log:
             logging.info(msg)
         lines = [l.strip() for l in msg.strip().split('\n')]
         self.respond_raw("// " + "\n// ".join(lines))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _respond_error(self, msg):
         logging.warning(msg)
         lines = msg.strip().split('\n')
@@ -235,6 +404,12 @@ class GCodeDispatch:
         self.respond_raw('!! %s' % (lines[0].strip(),))
         if self.is_fileinput:
             self.printer.request_exit('error_exit')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _respond_state(self, state):
         self.respond_info("Klipper state: %s" % (state,), log=False)
     # Parameter parsing helpers
@@ -243,6 +418,12 @@ class GCodeDispatch:
         r'(?P<cmd>[a-zA-Z_][a-zA-Z0-9_]+)(?:\s+|$)'
         r'(?P<args>[^#*;]*?)'
         r'\s*(?:[#*;].*)?$')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _get_extended_params(self, gcmd):
         m = self.extended_r.match(gcmd.get_commandline())
         if m is None:
@@ -258,6 +439,12 @@ class GCodeDispatch:
         except ValueError as e:
             raise self.error("Malformed command '%s'"
                              % (gcmd.get_commandline(),))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # G-Code special command handlers
     def cmd_default(self, gcmd):
         cmd = gcmd.get_command()
@@ -290,6 +477,12 @@ class GCodeDispatch:
             # Don't warn about requests to turn off fan when fan not present
             return
         gcmd.respond_info('Unknown command:"%s"' % (cmd,))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _cmd_mux(self, command, gcmd):
         key, values = self.mux_commands[command]
         if None in values:
@@ -300,13 +493,31 @@ class GCodeDispatch:
             raise gcmd.error("The value '%s' is not valid for %s"
                              % (key_param, key))
         values[key_param](gcmd)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     # Low-level G-Code commands that are needed before the config file is loaded
     def cmd_M110(self, gcmd):
         # Set Current Line Number
         pass
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_M112(self, gcmd):
         # Emergency Stop
         self.printer.invoke_shutdown("Shutdown due to M112 command")
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_M115(self, gcmd):
         # Get Firmware Version and Capabilities
         software_version = self.printer.get_start_args().get('software_version')
@@ -315,6 +526,12 @@ class GCodeDispatch:
         did_ack = gcmd.ack(msg)
         if not did_ack:
             gcmd.respond_info(msg)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def request_restart(self, result):
         if self.is_printer_ready:
             toolhead = self.printer.lookup_object('toolhead')
@@ -326,14 +543,38 @@ class GCodeDispatch:
             toolhead.wait_moves()
         self.printer.request_exit(result)
     cmd_RESTART_help = "Reload config file and restart host software"
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_RESTART(self, gcmd):
         self.request_restart('restart')
     cmd_FIRMWARE_RESTART_help = "Restart firmware, host, and reload config"
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_FIRMWARE_RESTART(self, gcmd):
         self.request_restart('firmware_restart')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_ECHO(self, gcmd):
         gcmd.respond_info(gcmd.get_commandline(), log=False)
     cmd_STATUS_help = "Report the printer status"
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_STATUS(self, gcmd):
         if self.is_printer_ready:
             self._respond_state("Ready")
@@ -342,18 +583,33 @@ class GCodeDispatch:
         msg = msg.rstrip() + "\nKlipper state: Not ready"
         raise gcmd.error(msg)
     cmd_HELP_help = "Report the list of available extended G-Code commands"
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def cmd_HELP(self, gcmd):
         cmdhelp = []
         if not self.is_printer_ready:
-            cmdhelp.append("Printer is not ready - not all commands available.")
+            cmdhelp.append("[(Phrozen)Klipper]:Printer is not ready - not all commands available.")
         cmdhelp.append("Available extended commands:")
         for cmd in sorted(self.gcode_handlers):
             if cmd in self.gcode_help:
                 cmdhelp.append("%-10s: %s" % (cmd, self.gcode_help[cmd]))
         gcmd.respond_info("\n".join(cmdhelp), log=False)
-
+####################################
+#类名：
+#功能描述：蓝才刚-20230830
+####################################
 # Support reading gcode from a pseudo-tty interface
 class GCodeIO:
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def __init__(self, printer):
         self.printer = printer
         printer.register_event_handler("klippy:ready", self._handle_ready)
@@ -375,17 +631,35 @@ class GCodeIO:
         self.pending_commands = []
         self.bytes_read = 0
         self.input_log = collections.deque([], 50)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_ready(self):
         self.is_printer_ready = True
         if self.is_fileinput and self.fd_handle is None:
             self.fd_handle = self.reactor.register_fd(self.fd,
                                                       self._process_data)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _dump_debug(self):
         out = []
         out.append("Dumping gcode input %d blocks" % (len(self.input_log),))
         for eventtime, data in self.input_log:
             out.append("Read %f: %s" % (eventtime, repr(data)))
         logging.info("\n".join(out))
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _handle_shutdown(self):
         if not self.is_printer_ready:
             return
@@ -394,6 +668,12 @@ class GCodeIO:
         if self.is_fileinput:
             self.printer.request_exit('error_exit')
     m112_r = re.compile('^(?:[nN][0-9]+)?\s*[mM]112(?:\s|$)')
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _process_data(self, eventtime):
         # Read input, separate by newline, and add to pending_commands
         try:
@@ -440,6 +720,12 @@ class GCodeIO:
         if self.fd_handle is None:
             self.fd_handle = self.reactor.register_fd(self.fd,
                                                       self._process_data)
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def _respond_raw(self, msg):
         if self.pipe_is_active:
             try:
@@ -447,9 +733,21 @@ class GCodeIO:
             except os.error:
                 logging.exception("Write g-code response")
                 self.pipe_is_active = False
+    ####################################
+    #函数名称：
+    #输入参数：
+    #返 回 值:
+    #功能描述：蓝才刚-20230830
+    ####################################
     def stats(self, eventtime):
         return False, "gcodein=%d" % (self.bytes_read,)
 
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def add_early_printer_objects(printer):
     printer.add_object('gcode', GCodeDispatch(printer))
     printer.add_object('gcode_io', GCodeIO(printer))

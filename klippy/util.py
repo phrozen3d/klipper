@@ -1,26 +1,41 @@
-# Low level unix utility functions
-#
-# Copyright (C) 2016-2020  Kevin O'Connor <kevin@koconnor.net>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license.
+####################################
+#项目名称：
+#芯片类型: 
+#功能: 
+#研发人员：蓝才刚
+#开发时间: 20230830
+####################################
+
+
 import sys, os, pty, fcntl, termios, signal, logging, json, time
 import subprocess, traceback, shlex
 
-
-######################################################################
-# Low-level Unix commands
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Return the SIGINT interrupt handler back to the OS default
 def fix_sigint():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 fix_sigint()
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Set a file-descriptor as non-blocking
 def set_nonblock(fd):
     fcntl.fcntl(fd, fcntl.F_SETFL
                 , fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Clear HUPCL flag
 def clear_hupcl(fd):
     attrs = termios.tcgetattr(fd)
@@ -29,7 +44,12 @@ def clear_hupcl(fd):
         termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
     except termios.error:
         pass
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Support for creating a pseudo-tty for emulating a serial port
 def create_pty(ptyname):
     mfd, sfd = pty.openpty()
@@ -47,10 +67,12 @@ def create_pty(ptyname):
     return mfd
 
 
-######################################################################
-# Helper code for extracting mcu build info
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def dump_file_stats(build_dir, filename):
     fname = os.path.join(build_dir, filename)
     try:
@@ -60,7 +82,12 @@ def dump_file_stats(build_dir, filename):
         logging.info("Build file %s(%d): %s", fname, fsize, timestr)
     except:
         logging.info("No build file %s", fname)
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 # Try to log information on the last mcu build
 def dump_mcu_build():
     build_dir = os.path.join(os.path.dirname(__file__), '..')
@@ -90,10 +117,12 @@ def dump_mcu_build():
     dump_file_stats(build_dir, 'out/klipper.elf')
 
 
-######################################################################
-# Python2 wrapper hacks
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def setup_python2_wrappers():
     if sys.version_info.major >= 3:
         return
@@ -105,11 +134,12 @@ def setup_python2_wrappers():
     time.process_time = time.clock
 setup_python2_wrappers()
 
-
-######################################################################
-# General system and software information
-######################################################################
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def get_cpu_info():
     try:
         f = open('/proc/cpuinfo', 'r')
@@ -124,7 +154,12 @@ def get_cpu_info():
     core_count = [k for k, v in lines].count("processor")
     model_name = dict(lines).get("model name", "?")
     return "%d core %s" % (core_count, model_name)
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def get_version_from_file(klippy_src):
     try:
         with open(os.path.join(klippy_src, '.version')) as h:
@@ -132,7 +167,12 @@ def get_version_from_file(klippy_src):
     except IOError:
         pass
     return "?"
-
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################
 def get_git_version(from_file=True):
     klippy_src = os.path.dirname(__file__)
 
