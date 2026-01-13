@@ -1,0 +1,13 @@
+[Unit]
+Description=KlipperScreen Startup Script
+Requires=moonraker.service
+After=moonraker.service
+
+[Service]
+ExecStart=/bin/bash /home/prz/klipper/klippy/extras/phrozen_dev/KlipperScreen-start-ARCO300-phrozen-RK3308-STM32F407VET6-I31.sh
+User=prz
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=final.target

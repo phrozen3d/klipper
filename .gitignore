@@ -1,6 +1,52 @@
-out
+############################
+# Python
+############################
+__pycache__/
+*.py[cod]
+*$py.class
+
+############################
+# Build artifacts
+############################
+/build/
+/dist/
+*.o
+*.a
 *.so
-*.pyc
-.config
-.config.old
-klippy/.version
+
+# Allow runtime shared libraries (white list)
+!runtime/**/*.so
+!plugins/**/*.so
+!drivers/**/*.so
+
+############################
+# IDE / Editor
+############################
+
+# JetBrains (PyCharm / CLion / IntelliJ)
+.idea/
+
+# VS Code
+.vscode/*
+
+# Allow shared VS Code configs
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+############################
+# OS / Misc
+############################
+.DS_Store
+Thumbs.db
+
+############################
+# Logs
+############################
+*.log
+
+############################
+# FRP runtime artifacts
+############################
+frp-oms/**/frpc.log
+

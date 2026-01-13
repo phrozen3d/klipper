@@ -1,0 +1,18 @@
+#!/usr/bin/expect
+
+set password "makerbase"
+set srcfile "/home/mks/klipper/klippy/extras/phrozen_dev/serial-screen/fluidd"
+set destpath "/etc/nginx/sites-available/"
+
+# 复制文件
+spawn sudo cp $srcfile $destpath
+
+expect "password for"
+send "$password\r"
+
+expect eof
+
+# 删除源文件
+exec rm -f $srcfile
+
+puts "? 文件复制并删除成功"

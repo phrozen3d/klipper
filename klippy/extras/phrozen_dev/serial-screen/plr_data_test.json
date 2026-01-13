@@ -1,0 +1,13 @@
+{
+	"if_need_reprint":	true,
+	"print_file_name":	"30x24X180_测试圆柱_PLA_2h14m.gcode",
+	"print_file_path":	"test/30x24X180_测试圆柱_PLA_2h14m.gcode",
+	"file_position":	153238,
+	"extruder_target":	200,
+	"heater_bed_target":	60,
+	"x_position":	137.142000,
+	"y_position":	151.344000,
+	"z_position":	1.800000,
+	"e_position":	38.902020,
+	"absolute_e":	false
+}

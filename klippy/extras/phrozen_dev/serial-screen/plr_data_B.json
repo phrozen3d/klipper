@@ -1,0 +1,13 @@
+{
+	"if_need_reprint":	false,
+	"print_file_name":	"",
+	"print_file_path":	"",
+	"file_position":	0,
+	"extruder_target":	0,
+	"heater_bed_target":	0,
+	"x_position":	0,
+	"y_position":	0,
+	"z_position":	0,
+	"e_position":	0,
+	"absolute_e":	false
+}

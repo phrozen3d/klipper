@@ -1,0 +1,116 @@
+#!/bin/sh
+
+sleep 30
+
+G_WLAN0_MAC4_LAST4_INT=""
+G_ETH0_MAC4_LAST4_INT=""
+G_WLAN0_MAC6_LAST4_INT=""
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################function 
+#22=WLAN0_MAC4=c0:f5:35:79:0a:7c
+#1883=ETH0_MAC4=ba:d6:2b:5a:70:4d
+#80=WLAN0_MAC6=fe80::9c70:e018:8613:7a0a
+CalcMappingPort() {
+	WLAN0_MAC4=`/usr/sbin/ifconfig wlan0|grep ether|awk '{print $2}'|tr -d ':'`
+	echo "22=WLAN0_MAC4=${WLAN0_MAC4}"
+	WLAN0_MAC4_LAST4=0x`expr substr ${WLAN0_MAC4} 9 4`
+	echo "22=WLAN0_MAC4_LAST4=${WLAN0_MAC4_LAST4}"
+	G_WLAN0_MAC4_LAST4_INT=`printf "%d\n" $(($WLAN0_MAC4_LAST4))`
+	echo "G_WLAN0_MAC4_LAST4_INT=$G_WLAN0_MAC4_LAST4_INT"
+	#WLAN0_MAC4_LAST4_INT=`${WLAN0_MAC4_LAST4}`
+	#echo "WLAN0_MAC4_LAST4_INT=${WLAN0_MAC4_LAST4_INT}"
+	
+
+	ETH0_MAC4=`/usr/sbin/ifconfig eth0|grep ether|awk '{print $2}'|tr -d ':'`
+	echo "1883=ETH0_MAC4=${ETH0_MAC4}"
+	ETH0_MAC4_LAST4=0x`expr substr ${ETH0_MAC4} 9 4`
+	echo "1883=ETH0_MAC4_LAST4=${ETH0_MAC4_LAST4}"
+	G_ETH0_MAC4_LAST4_INT=`printf "%d\n" $(($ETH0_MAC4_LAST4))`
+	echo "G_ETH0_MAC4_LAST4_INT=$G_ETH0_MAC4_LAST4_INT"
+
+	#WLAN0_MAC6=`/usr/sbin/ifconfig wlan0|grep inet6|awk '{print $2}'|tr -d ':'`
+	#echo "8808=WLAN0_MAC6=${WLAN0_MAC6}"
+	#WLAN0_MAC6_LAST4=0x`expr substr ${WLAN0_MAC6} 17 4`
+	#WLAN0_MAC6_LAST4=0x`expr substr ${WLAN0_MAC4} 7 4`
+	#echo "8808=WLAN0_MAC6_LAST4=${WLAN0_MAC6_LAST4}"
+	#G_WLAN0_MAC6_LAST4_INT=`printf "%d\n" $(($WLAN0_MAC6_LAST4))`
+	#G_WLAN0_MAC6_LAST4_INT=`printf "%d\n" $((rand()*100))`
+	#if [ ${G_WLAN0_MAC6_LAST4_INT} eq 0 ]; then
+	#	echo "{G_WLAN0_MAC6_LAST4_INT}==0"
+	#fi
+	#echo "G_WLAN0_MAC6_LAST4_INT=${G_WLAN0_MAC6_LAST4_INT}"
+	#number=$(( ($RANDOM * 2) + $RANDOM ))
+	#echo "$number"
+	
+	#WLAN0_MAC6=`/usr/sbin/ifconfig wlan0|grep inet6|awk '{print $2}'|tr -d ':'`
+	#echo "8808=WLAN0_MAC6=${WLAN0_MAC6}"
+	#WLAN0_MAC6_LAST4=0x`expr substr ${WLAN0_MAC6} 17 4`
+	#echo "8808=WLAN0_MAC6_LAST4=${WLAN0_MAC6_LAST4}"
+	#G_WLAN0_MAC6_LAST4_INT=`printf "%d\n" $(($WLAN0_MAC6_LAST4))`
+	G_WLAN0_MAC6_LAST4_INT=`expr $G_WLAN0_MAC4_LAST4_INT + $G_ETH0_MAC4_LAST4_INT`
+	#G_WLAN0_MAC6_LAST4_INT=awk 'BEGIN{printf "%.5f\n", 5/6}'
+	G_WLAN0_MAC6_LAST4_INT=$(expr $G_WLAN0_MAC6_LAST4_INT / 2)
+	echo "G_WLAN0_MAC6_LAST4_INT=$G_WLAN0_MAC6_LAST4_INT"
+}
+
+####################################
+#函数名称：
+#输入参数：
+#返 回 值:
+#功能描述：蓝才刚-20230830
+####################################function 
+GenerateFrpcIni() {
+	echo "
+	[common]
+	server_addr = 42.193.239.84
+	server_port = 7000
+	token = lancaigang
+
+	[LCG-${WLAN0_MAC4}-22]
+	type = tcp
+	local_ip = 127.0.0.1
+	local_port = 22
+	remote_port = ${G_WLAN0_MAC4_LAST4_INT}
+	[LCG-${WLAN0_MAC4}-1883]
+	type = tcp
+	local_ip = 127.0.0.1
+	local_port = 1883
+	remote_port = ${G_ETH0_MAC4_LAST4_INT}
+	[LCG-${WLAN0_MAC4}-fluidd]
+	type = tcp
+	local_ip = 127.0.0.1
+	local_port = 8808
+	remote_port = ${G_WLAN0_MAC6_LAST4_INT}
+	" > /home/mks/klipper/klippy/extras/phrozen_dev/frp-oms/frp/frpc.ini
+}
+
+#lancaigang240415：计算mac后2bytes映射到tcp端口
+CalcMappingPort
+echo "CalcMappingPort"
+echo "================================================="
+echo "G_WLAN0_MAC4_LAST4_INT=$G_WLAN0_MAC4_LAST4_INT"
+echo "G_ETH0_MAC4_LAST4_INT=$G_ETH0_MAC4_LAST4_INT"
+echo "G_WLAN0_MAC6_LAST4_INT=$G_WLAN0_MAC6_LAST4_INT"
+
+
+#lancaigang240415：生成frpc.ini
+GenerateFrpcIni
+echo "GenerateFrpcIni"
+
+
+
+
+
+while true
+do
+        value=`ps | grep frpc | grep -v frpc_script | grep -v grep | wc -l`
+        if [ $value -eq 0 ]; then
+                /home/mks/klipper/klippy/extras/phrozen_dev/frp-oms/frp/frpc -c /home/mks/klipper/klippy/extras/phrozen_dev/frp-oms/frp/frpc.ini
+        fi
+        sleep 10
+done
+

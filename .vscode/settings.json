@@ -1,0 +1,30 @@
+{
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintArgs": [
+        "--disable=C0103,C0116,C0209,C0301",
+        "--errors-only",
+        "--extension-pkg-whitelist=pygame",
+        "--unsafe-load-any-extension=y"
+    ],
+    "cSpell.words": [
+        "gcmd",
+        "gcode",
+        "klipper",
+        "Phrozen"
+    ],
+    "files.associations": {
+        "*.tpl": "html",
+        "command.h": "c",
+        "misc.h": "c",
+        "sched.h": "c",
+        "autoconf.h": "c",
+        "usb_cdc_ep.h": "c",
+        "irq.h": "c",
+        "canbus.h": "c",
+        "internal.h": "c",
+        "gpio.h": "c",
+        "basecmd.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
+}
