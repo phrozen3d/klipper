@@ -9903,6 +9903,13 @@ class Commands(Base):
     def Cmds_CmdP114(self, gcmd):
         _ = gcmd
 
+        # lancaigang 20260428 - 打印中禁止P114主动查询，防止阻塞GCode队列导致打印凸点
+        idle_timeout = self.G_PhrozenPrinter.lookup_object('idle_timeout')
+        if idle_timeout.state == "Printing":
+            logging.info("P114: 打印中跳过P114查询")
+            self.G_PhrozenFluiddRespondInfo("P114: 打印中跳过P114查询")
+            return
+
         if gcmd is None:
             self.G_PhrozenFluiddRespondInfo("[(cmds.python)Cmds_CmdP114]命令P114-None")
         if gcmd is not None:
